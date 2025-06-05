@@ -35,6 +35,7 @@ sudo apt-get update
 sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y
 sudo usermod -aG docker $USER
 newgrp docker
+systemctl enable docker
 # Verify that Docker Engine is installed correctly by running the hello-world image:
 echo "Docker version: $(docker --version)"
 echo "Instalation has been completed successfully"
