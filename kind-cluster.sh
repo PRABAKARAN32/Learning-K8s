@@ -233,15 +233,27 @@ create_kind_cluster() {
     echo -e "${CYAN}--- Creating a Kind Kubernetes Cluster ---${NC}"
 
     CLUSTER_NAME="kind-cluster"
-    # Stable K8s v1.29.2 image for Kind v0.23.0
-    KIND_NODE_IMAGE="kindest/node:v1.29.2@sha256:56df935d10a265691f165a2d61d102e3b20248a39626e27b40748c086422ce4d"
+    KIND_CONFIG_FILE="config.yaml" # Name of the Kind configuration file
+
+    echo -e "${YELLOW}Creating Kind configuration file '${KIND_CONFIG_FILE}' with custom node roles...${NC}"
+    # Create the config.yaml file with the desired node roles
+    cat <<EOF > "$KIND_CONFIG_FILE"
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+- role: worker
+- role: worker
+EOF
+    echo -e "${GREEN}Kind configuration file '${KIND_CONFIG_FILE}' created.${NC}"
 
     echo -e "${YELLOW}Checking if cluster '$CLUSTER_NAME' already exists...${NC}"
     if kind get clusters 2>/dev/null | grep -q "$CLUSTER_NAME"; then
         echo -e "${YELLOW}Kind cluster '$CLUSTER_NAME' already exists. Skipping cluster creation.${NC}"
+        echo -e "${YELLOW}Note: If the existing cluster was created with a different configuration (e.g., fewer nodes), you might need to delete it first using 'kind delete cluster --name $CLUSTER_NAME' and then re-run this script to apply the new configuration.${NC}"
     else
-        echo -e "${YELLOW}Creating Kind cluster '$CLUSTER_NAME' with image ${KIND_NODE_IMAGE}...${NC}"
-        kind create cluster --image "$KIND_NODE_IMAGE" --name "$CLUSTER_NAME" || { echo -e "${RED}Failed to create Kind cluster. Exiting.${NC}"; exit 1; }
+        echo -e "${YELLOW}Creating Kind cluster '$CLUSTER_NAME' using configuration from '${KIND_CONFIG_FILE}'...${NC}"
+        kind create cluster --config "$KIND_CONFIG_FILE" --name "$CLUSTER_NAME" || { echo -e "${RED}Failed to create Kind cluster. Exiting.${NC}"; exit 1; }
         echo -e "${GREEN}Kind cluster '$CLUSTER_NAME' created successfully!${NC}"
     fi
 
@@ -251,8 +263,10 @@ create_kind_cluster() {
     echo -e "${GREEN}Kubectl context set to 'kind-$CLUSTER_NAME'.${NC}"
 
     echo -e "${YELLOW}Verifying cluster nodes...${NC}"
+    echo -e "${YELLOW}Waiting for all nodes to be ready (this may take a few minutes for a multi-node cluster)...${NC}"
+    kubectl wait --for=condition=Ready node --all --timeout=5m || { echo -e "${RED}Nodes did not become ready within 5 minutes. Please check cluster status manually. Exiting.${NC}"; exit 1; }
     kubectl get nodes || { echo -e "${RED}Failed to get cluster nodes. Cluster might not be ready. Exiting.${NC}"; exit 1; }
-    echo -e "${GREEN}Cluster verification complete.${NC}"
+    echo -e "${GREEN}Cluster verification complete. All nodes are ready.${NC}"
     echo ""
 }
 
